@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/openshift/release:golang-1.13 AS build-env
+FROM quay.io/projectquay/golang:1.25 AS build-env
 
 COPY . /src/
 
