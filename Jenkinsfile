@@ -40,7 +40,7 @@ timeout(time: 15, unit: 'MINUTES') {
               }
             }
 
-            if (BRANCH_NAME == "master" || BRANCH_NAME.startsWith("releases/") || BRANCH_NAME.startsWith("feature/") || BRANCH_NAME.startsWith("fix/")) {
+            if (BRANCH_NAME == "main" || BRANCH_NAME == "master" || BRANCH_NAME.startsWith("releases/")) {
               if (currentBuild.result != 'UNSTABLE' || params.FORCE_DEPLOYMENT) {
                 dir(knimetools.jenkinsfileDir()) {
                   version = readFile('VERSION').trim() + changelistSuffix()
