@@ -1,3 +1,5 @@
+This repository is maintained by [CloudOps](mailto:cloud-infrastructure@knime.com).
+
 # Keycloak Realm Operator
 A Kubernetes Operator based on the Operator SDK for managing Realm and its sub-resources in Keycloak. This Operator is
 forked from the [legacy Keycloak Operator](https://github.com/keycloak/keycloak-operator) and stripped off of any functionality
