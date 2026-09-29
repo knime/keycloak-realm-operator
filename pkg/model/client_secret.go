@@ -15,7 +15,8 @@ func ClientSecret(cr *v1alpha1.KeycloakClient) *v1.Secret {
 			Name:      escapedSecretName,
 			Namespace: cr.Namespace,
 			Labels: map[string]string{
-				"app": ApplicationName,
+				"app":                           ApplicationName,
+				"velero.io/exclude-from-backup": "true",
 			},
 		},
 		Data: map[string][]byte{

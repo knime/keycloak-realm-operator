@@ -295,6 +295,40 @@ func (c *Client) GetRealm(realmName string) (*v1alpha1.KeycloakRealm, error) {
 	return ret, err
 }
 
+func (c *Client) GetClientByClientID(clientID, realmName string) (*v1alpha1.KeycloakAPIClient, error) {
+	resourcePath := fmt.Sprintf("realms/%s/clients?clientId=%s", realmName, url.QueryEscape(clientID))
+	// list() only logs unmarshal errors, so capture them here: a malformed response must not
+	// be mistaken for "client does not exist", which would lead to a duplicate create.
+	var decodeErr error
+	result, err := c.list(resourcePath, "clients", func(body []byte) (T, error) {
+		var clients []*v1alpha1.KeycloakAPIClient
+		decodeErr = json.Unmarshal(body, &clients)
+		return clients, decodeErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	if decodeErr != nil {
+		return nil, errors.Wrap(decodeErr, "error decoding get client by clientId response")
+	}
+	clients, ok := result.([]*v1alpha1.KeycloakAPIClient)
+	if !ok {
+		return nil, errors.Errorf("error decoding get client by clientId response")
+	}
+
+	var match *v1alpha1.KeycloakAPIClient
+	for _, candidate := range clients {
+		if candidate == nil || candidate.ClientID != clientID {
+			continue
+		}
+		if match != nil {
+			return nil, errors.Errorf("multiple clients with clientId %q found in realm %q", clientID, realmName)
+		}
+		match = candidate
+	}
+	return match, nil
+}
+
 func (c *Client) GetClient(clientID, realmName string) (*v1alpha1.KeycloakAPIClient, error) {
 	result, err := c.get(fmt.Sprintf("realms/%s/clients/%s", realmName, clientID), "client", func(body []byte) (T, error) {
 		client := &v1alpha1.KeycloakAPIClient{}
@@ -940,6 +974,7 @@ type KeycloakInterface interface {
 	DeleteRealmRoleComposites(realmName, roleID string, roles *[]v1alpha1.RoleRepresentation) error
 
 	CreateClient(client *v1alpha1.KeycloakAPIClient, realmName string) (string, error)
+	GetClientByClientID(clientID, realmName string) (*v1alpha1.KeycloakAPIClient, error)
 	GetClient(clientID, realmName string) (*v1alpha1.KeycloakAPIClient, error)
 	GetClientSecret(clientID, realmName string) (string, error)
 	GetClientInstall(clientID, realmName string) ([]byte, error)
