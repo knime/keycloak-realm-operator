@@ -303,6 +303,9 @@ func (c *Client) GetClientByClientID(clientID, realmName string) (*v1alpha1.Keyc
 	result, err := c.list(resourcePath, "clients", func(body []byte) (T, error) {
 		var clients []*v1alpha1.KeycloakAPIClient
 		decodeErr = json.Unmarshal(body, &clients)
+		if decodeErr == nil && clients == nil {
+			decodeErr = errors.Errorf("error decoding get client by clientId response: expected an array")
+		}
 		return clients, decodeErr
 	})
 	if err != nil {
