@@ -77,6 +77,20 @@ func (notFoundClient) Get(ctx context.Context, key client.ObjectKey, obj runtime
 	return apiErrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, key.Name)
 }
 
+func (notFoundClient) Update(context.Context, runtime.Object, ...client.UpdateOption) error {
+	return nil
+}
+
+type recordingClient struct {
+	notFoundClient
+	updated *kc.KeycloakClient
+}
+
+func (c *recordingClient) Update(_ context.Context, obj runtime.Object, _ ...client.UpdateOption) error {
+	c.updated = obj.(*kc.KeycloakClient).DeepCopy()
+	return nil
+}
+
 func newClientCR(id string) *kc.KeycloakClient {
 	cr := &kc.KeycloakClient{}
 	cr.Name = "hub-ui"
@@ -95,14 +109,17 @@ func TestClientState_Read_AdoptsExistingClientByClientIDWhenIDAbsent(t *testing.
 	stub := &stubKeycloak{byClientID: &kc.KeycloakAPIClient{ID: "existing-uuid", ClientID: "hub-ui"}}
 	cr := newClientCR("")
 	state := newRealmState()
+	controllerClient := &recordingClient{}
 
 	// when
-	err := state.Read(context.TODO(), cr, stub, notFoundClient{})
+	err := state.Read(context.TODO(), cr, stub, controllerClient)
 
 	// then the existing client is adopted instead of being reported as missing (which would trigger a duplicate create)
 	assert.NoError(t, err)
 	assert.NotNil(t, state.Client)
 	assert.Equal(t, "existing-uuid", cr.Spec.Client.ID)
+	assert.NotNil(t, controllerClient.updated)
+	assert.Equal(t, "existing-uuid", controllerClient.updated.Spec.Client.ID)
 	assert.Equal(t, "hub-ui", stub.byClientIDLookup)
 	assert.Equal(t, 0, stub.getClientCalls)
 }

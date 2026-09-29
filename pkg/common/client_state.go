@@ -57,6 +57,9 @@ func (i *ClientState) Read(context context.Context, cr *kc.KeycloakClient, realm
 		}
 		if apiClient != nil && apiClient.ID != "" && cr.Spec.Client.ID != apiClient.ID {
 			cr.Spec.Client.ID = apiClient.ID
+			if err := controllerClient.Update(context, cr); err != nil {
+				return err
+			}
 		}
 	}
 	if apiClient == nil {
