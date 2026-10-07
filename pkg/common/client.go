@@ -893,6 +893,17 @@ func (c *Client) login(user, pass string) error {
 
 // defaultRequester returns a default client for requesting http endpoints
 func defaultRequester(serverCert []byte) (Requester, error) {
+	return newRequester(serverCert, true)
+}
+
+// noRedirectRequester returns a client that returns redirect responses as they are instead of following them.
+// It is used to check that a Keycloak URL answers: behind an Istio sidecar Keycloak redirects to a URL without
+// the port (it honors X-Forwarded-Proto), which is not reachable, although Keycloak itself is.
+func noRedirectRequester(serverCert []byte) (Requester, error) {
+	return newRequester(serverCert, false)
+}
+
+func newRequester(serverCert []byte, followRedirects bool) (Requester, error) {
 	tlsConfig, err := createTLSConfig(serverCert)
 	if err != nil {
 		return nil, err
@@ -904,6 +915,9 @@ func defaultRequester(serverCert []byte) (Requester, error) {
 	transport.ForceAttemptHTTP2 = false
 
 	c := &http.Client{Transport: transport, Timeout: time.Second * 10}
+	if !followRedirects {
+		c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	}
 	return c, nil
 }
 
@@ -1054,7 +1068,12 @@ func (i *LocalConfigKeycloakFactory) AuthenticatedClient(kc v1alpha1.ExternalKey
 		return nil, err
 	}
 
-	kcURL, err := getKeycloakURL(kc, requester)
+	urlChecker, err := noRedirectRequester(serverCert)
+	if err != nil {
+		return nil, err
+	}
+
+	kcURL, err := getKeycloakURL(kc, urlChecker)
 	if err != nil {
 		return nil, err
 	}
