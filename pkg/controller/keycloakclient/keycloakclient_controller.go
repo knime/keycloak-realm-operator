@@ -149,6 +149,12 @@ func (r *ReconcileKeycloakClient) Reconcile(request reconcile.Request) (reconcil
 			if err != nil {
 				return r.ManageError(instance, err)
 			}
+			if clientState.AdoptedClientID != "" {
+				msg := fmt.Sprintf("adopted existing Keycloak client %v (id %v) in realm %v",
+					instance.Spec.Client.ClientID, clientState.AdoptedClientID, realm.Spec.Realm.Realm)
+				log.Info(msg, "Request.Namespace", instance.Namespace, "Request.Name", instance.Name)
+				r.recorder.Event(instance, "Warning", "ClientAdopted", msg)
+			}
 
 			// Figure out the actions to keep the realms up to date with
 			// the desired state
