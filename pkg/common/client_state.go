@@ -25,6 +25,8 @@ type ClientState struct {
 	DeprecatedClientSecret  *v1.Secret // keycloak-client-secret-<clientID>
 	Keycloak                kc.ExternalKeycloak
 	ServiceAccountUserState *UserState
+	// AdoptedClientID is set when Read bound the CR to an existing Keycloak client found by clientId.
+	AdoptedClientID string
 }
 
 func NewClientState(context context.Context, realm *kc.KeycloakRealm, keycloak kc.ExternalKeycloak) *ClientState {
@@ -60,6 +62,7 @@ func (i *ClientState) Read(context context.Context, cr *kc.KeycloakClient, realm
 			if err := controllerClient.Update(context, cr); err != nil {
 				return err
 			}
+			i.AdoptedClientID = apiClient.ID
 		}
 	}
 	if apiClient == nil {
