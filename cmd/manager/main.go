@@ -16,8 +16,6 @@ import (
 	"github.com/keycloak/keycloak-realm-operator/version"
 	"github.com/pkg/errors"
 
-	"github.com/keycloak/keycloak-realm-operator/pkg/common"
-
 	routev1 "github.com/openshift/api/route/v1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -154,14 +152,6 @@ func main() {
 	if err := routev1.AddToScheme(mgr.GetScheme()); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
-	}
-
-	// Create and start a new auto detect process for this operator
-	autodetect, err := common.NewAutoDetect(mgr)
-	if err != nil {
-		log.Error(err, "failed to start the background process to auto-detect the operator capabilities")
-	} else {
-		autodetect.Start()
 	}
 
 	// Setup all Controllers
