@@ -9,10 +9,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/keycloak/keycloak-realm-operator/pkg/apis/keycloak/v1alpha1"
-	kc "github.com/keycloak/keycloak-realm-operator/pkg/apis/keycloak/v1alpha1"
 	keycloakv1alpha1 "github.com/keycloak/keycloak-realm-operator/pkg/apis/keycloak/v1alpha1"
 	"github.com/keycloak/keycloak-realm-operator/pkg/common"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -65,10 +62,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch for changes to primary resource Keycloak
 	err = c.Watch(&source.Kind{Type: &keycloakv1alpha1.ExternalKeycloak{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
-		return err
-	}
-
-	if err := common.WatchSecondaryResource(c, ControllerName, common.SecretKind, &corev1.Secret{}, &kc.ExternalKeycloak{}); err != nil {
 		return err
 	}
 
