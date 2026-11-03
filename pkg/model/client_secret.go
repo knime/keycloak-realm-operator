@@ -8,6 +8,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const veleroExcludeFromBackupLabel = "velero.io/exclude-from-backup"
+
 func ClientSecret(cr *v1alpha1.KeycloakClient) *v1.Secret {
 	escapedSecretName := SanitizeResourceNameWithAlphaNum(ClientSecretName + "-" + cr.Name)
 	return &v1.Secret{
@@ -15,8 +17,8 @@ func ClientSecret(cr *v1alpha1.KeycloakClient) *v1.Secret {
 			Name:      escapedSecretName,
 			Namespace: cr.Namespace,
 			Labels: map[string]string{
-				"app":                           ApplicationName,
-				"velero.io/exclude-from-backup": "true",
+				"app":                        ApplicationName,
+				veleroExcludeFromBackupLabel: "true",
 			},
 		},
 		Data: map[string][]byte{
@@ -36,6 +38,11 @@ func ClientSecretSelector(cr *v1alpha1.KeycloakClient) client.ObjectKey {
 
 func ClientSecretReconciled(cr *v1alpha1.KeycloakClient, currentState *v1.Secret) *v1.Secret {
 	reconciled := currentState.DeepCopy()
+	// Secrets created before the exclusion label existed only get it here.
+	if reconciled.Labels == nil {
+		reconciled.Labels = map[string]string{}
+	}
+	reconciled.Labels[veleroExcludeFromBackupLabel] = "true"
 	// Since the client is synced upon update, we always override what's there...
 	reconciled.Data = map[string][]byte{
 		ClientSecretClientIDProperty:     []byte(cr.Spec.Client.ClientID),

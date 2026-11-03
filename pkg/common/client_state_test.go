@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	kc "github.com/keycloak/keycloak-realm-operator/pkg/apis/keycloak/v1alpha1"
@@ -20,11 +21,12 @@ type stubKeycloak struct {
 	getClientCalls   int
 	byClientIDCalls  int
 	byClientIDLookup string
+	getClientErr     error
 }
 
 func (s *stubKeycloak) GetClient(clientID, realmName string) (*kc.KeycloakAPIClient, error) {
 	s.getClientCalls++
-	return s.byID, nil
+	return s.byID, s.getClientErr
 }
 
 func (s *stubKeycloak) GetClientByClientID(clientID, realmName string) (*kc.KeycloakAPIClient, error) {
@@ -83,12 +85,13 @@ func (notFoundClient) Update(context.Context, runtime.Object, ...client.UpdateOp
 
 type recordingClient struct {
 	notFoundClient
-	updated *kc.KeycloakClient
+	updated   *kc.KeycloakClient
+	updateErr error
 }
 
 func (c *recordingClient) Update(_ context.Context, obj runtime.Object, _ ...client.UpdateOption) error {
 	c.updated = obj.(*kc.KeycloakClient).DeepCopy()
-	return nil
+	return c.updateErr
 }
 
 func newClientCR(id string) *kc.KeycloakClient {
@@ -122,6 +125,7 @@ func TestClientState_Read_AdoptsExistingClientByClientIDWhenIDAbsent(t *testing.
 	assert.Equal(t, "existing-uuid", controllerClient.updated.Spec.Client.ID)
 	assert.Equal(t, "hub-ui", stub.byClientIDLookup)
 	assert.Equal(t, 0, stub.getClientCalls)
+	assert.Equal(t, "existing-uuid", state.AdoptedClientID)
 }
 
 func TestClientState_Read_ClientAbsentInKeycloakIsLeftForCreate(t *testing.T) {
@@ -153,6 +157,7 @@ func TestClientState_Read_KnownIDIsNotLookedUpByClientID(t *testing.T) {
 	assert.NotNil(t, state.Client)
 	assert.Equal(t, "known-uuid", cr.Spec.Client.ID)
 	assert.Equal(t, 0, stub.byClientIDCalls)
+	assert.Equal(t, "", state.AdoptedClientID)
 }
 
 func TestClientState_Read_StaleIDFallsBackToClientID(t *testing.T) {
@@ -167,4 +172,36 @@ func TestClientState_Read_StaleIDFallsBackToClientID(t *testing.T) {
 	// then the stale ID is replaced by the live one
 	assert.NoError(t, err)
 	assert.Equal(t, "new-uuid", cr.Spec.Client.ID)
+	assert.Equal(t, "new-uuid", state.AdoptedClientID)
+}
+
+func TestClientState_Read_GetClientErrorIsNotTreatedAsAbsent(t *testing.T) {
+	// given the lookup by internal ID fails
+	stub := &stubKeycloak{getClientErr: errors.New("keycloak unavailable")}
+	cr := newClientCR("known-uuid")
+	state := newRealmState()
+
+	// when
+	err := state.Read(context.TODO(), cr, stub, notFoundClient{})
+
+	// then the error surfaces instead of falling back to a clientId lookup
+	assert.Error(t, err)
+	assert.Nil(t, state.Client)
+	assert.Equal(t, 0, stub.byClientIDCalls)
+}
+
+func TestClientState_Read_AdoptionUpdateErrorIsReturned(t *testing.T) {
+	// given the repaired ID cannot be persisted
+	stub := &stubKeycloak{byClientID: &kc.KeycloakAPIClient{ID: "existing-uuid", ClientID: "hub-ui"}}
+	cr := newClientCR("")
+	state := newRealmState()
+	controllerClient := &recordingClient{updateErr: errors.New("conflict")}
+
+	// when
+	err := state.Read(context.TODO(), cr, stub, controllerClient)
+
+	// then reconciliation stops before acting on an unpersisted adoption
+	assert.Error(t, err)
+	assert.Nil(t, state.Client)
+	assert.Equal(t, "", state.AdoptedClientID)
 }
