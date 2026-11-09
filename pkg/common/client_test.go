@@ -364,3 +364,52 @@ func TestClient_GetFullKeycloakPath(t *testing.T) {
 
 	assert.Equal(t, serverURL+"/auth/", client.GetFullKeycloakPath())
 }
+
+// Keycloak behind an Istio sidecar answers with a redirect to a URL without the port
+// (it honors X-Forwarded-Proto). The URL check must only care that Keycloak answers.
+func TestValidateKeycloakURL_DoesNotFollowRedirects(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://127.0.0.1:1/auth/", http.StatusSeeOther) // nothing listens on port 1
+	}))
+	defer ts.Close()
+
+	requester, err := noRedirectRequester(nil)
+	assert.NoError(t, err)
+
+	url, err := validateKeycloakURL(ts.URL, requester)
+	assert.NoError(t, err)
+	assert.Equal(t, ts.URL, url)
+}
+
+func TestValidateKeycloakURL_UnreachableServerIsInvalid(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	closedURL := ts.URL
+	ts.Close()
+
+	requester, err := noRedirectRequester(nil)
+	assert.NoError(t, err)
+
+	url, err := validateKeycloakURL(closedURL, requester)
+	assert.NoError(t, err)
+	assert.Equal(t, "", url)
+}
+
+func TestDefaultRequester_StillFollowsRedirects(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusSeeOther)
+	}))
+	defer ts.Close()
+
+	requester, err := defaultRequester(nil)
+	assert.NoError(t, err)
+	request, err := http.NewRequest("GET", ts.URL, nil)
+	assert.NoError(t, err)
+	resp, err := requester.Do(request)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
